@@ -1,0 +1,528 @@
+<title>Action Tracker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: stacked summary strip, quick-add bar, owner-grouped card list */
+  :root {
+    --bg: #f3f1ed;
+    --surface: #ffffff;
+    --border: #e3dfd6;
+    --ink: #2a2824;
+    --ink-muted: #8a8477;
+    --accent: #d9652b;
+    --accent-ink: #ffffff;
+    --done: #a8a296;
+    --danger-bg: #fbe9e4;
+    --danger-ink: #a83e1f;
+    --radius: 14px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1b1a17;
+      --surface: #252320;
+      --border: #3a362f;
+      --ink: #ece8e1;
+      --ink-muted: #9c968a;
+      --accent: #e8794a;
+      --accent-ink: #1b1a17;
+      --done: #716b5f;
+      --danger-bg: #3a211b;
+      --danger-ink: #ff9470;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1b1a17;
+    --surface: #252320;
+    --border: #3a362f;
+    --ink: #ece8e1;
+    --ink-muted: #9c968a;
+    --accent: #e8794a;
+    --accent-ink: #1b1a17;
+    --done: #716b5f;
+    --danger-bg: #3a211b;
+    --danger-ink: #ff9470;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 17px;
+    line-height: 1.5;
+  }
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding-block: 28px 60px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  header h1 {
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+  }
+  header p {
+    color: var(--ink-muted);
+    font-size: 0.95rem;
+    margin: 0;
+  }
+
+  .summary-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 22px 0;
+  }
+  @media (max-width: 520px) {
+    .summary-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    min-width: 0;
+  }
+  .summary-card .num {
+    font-size: 1.7rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .summary-card .label {
+    color: var(--ink-muted);
+    font-size: 0.8rem;
+    margin-top: 2px;
+  }
+  .summary-card.accent .num { color: var(--accent); }
+  .summary-card.overdue .num { color: var(--danger-ink); }
+
+  form.add-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 30px;
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+  }
+  @media (max-width: 640px) {
+    form.add-form { grid-template-columns: 1fr; }
+  }
+  form.add-form label {
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    display: block;
+    margin-bottom: 4px;
+  }
+  form.add-form input {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 12px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+  form.add-form input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .btn-add {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    border-radius: 9px;
+    padding: 11px 20px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-add:hover { opacity: 0.9; }
+  .btn-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .owner-group { margin-bottom: 26px; }
+  .owner-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .owner-header h2 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0;
+  }
+  .owner-header .counts {
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+  }
+
+  .action-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .action-card.overdue {
+    background: var(--danger-bg);
+    border-color: var(--danger-ink);
+  }
+  .checkbox {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 2px solid var(--accent);
+    flex: none;
+    margin-top: 2px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    display: grid;
+    place-items: center;
+  }
+  .checkbox:checked { background: var(--accent); }
+  .checkbox:checked::after {
+    content: "✓";
+    color: var(--accent-ink);
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .checkbox:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .action-body { flex: 1; min-width: 0; }
+  .action-text { font-size: 1rem; overflow-wrap: break-word; }
+  .action-text.done { text-decoration: line-through; color: var(--done); }
+  .action-meta {
+    font-size: 0.82rem;
+    color: var(--ink-muted);
+    margin-top: 3px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .overdue .action-meta .due-tag { color: var(--danger-ink); font-weight: 700; }
+  .due-tag.badge {
+    background: var(--danger-ink);
+    color: var(--surface);
+    padding: 1px 8px;
+    border-radius: 100px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .delete-btn {
+    background: none;
+    border: none;
+    color: var(--ink-muted);
+    font-size: 1.1rem;
+    cursor: pointer;
+    flex: none;
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+  .delete-btn:hover { color: var(--danger-ink); }
+  .delete-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .empty-state {
+    text-align: center;
+    color: var(--ink-muted);
+    padding: 40px 10px;
+    font-size: 0.95rem;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    margin-bottom: 14px;
+  }
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--done);
+    flex: none;
+  }
+  .status-dot.live { background: #4caf7d; }
+  .status-dot.error { background: var(--danger-ink); }
+
+  .banner-error {
+    background: var(--danger-bg);
+    color: var(--danger-ink);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 0.88rem;
+    margin-bottom: 16px;
+  }
+</style>
+
+<div class="page">
+  <header>
+    <h1>Action Tracker</h1>
+    <p>Keep every agreed action owned, dated, and visible.</p>
+  </header>
+
+  <div class="status-bar">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText">Connecting…</span>
+  </div>
+
+  <div id="errorBanner"></div>
+
+  <div class="summary-row" id="summaryRow"></div>
+
+  <form class="add-form" id="addForm">
+    <div>
+      <label for="actionInput">Action</label>
+      <input type="text" id="actionInput" placeholder="e.g. Send revised floor plan" required>
+    </div>
+    <div>
+      <label for="ownerInput">Owner</label>
+      <input type="text" id="ownerInput" placeholder="e.g. Mei Ling" required>
+    </div>
+    <div>
+      <label for="dueInput">Due date</label>
+      <input type="date" id="dueInput" required>
+    </div>
+    <button type="submit" class="btn-add">Add action</button>
+  </form>
+
+  <div id="groups"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(function() {
+  const SUPABASE_URL = "https://izsqgsqsofyyfkbqkgol.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_e2MLdF6EhsfeeOOyN4PYhA_vrmhd4-y";
+  const TABLE = "actions";
+
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  let items = [];
+
+  function setStatus(state, text) {
+    const dot = document.getElementById('statusDot');
+    const label = document.getElementById('statusText');
+    dot.className = 'status-dot' + (state ? ' ' + state : '');
+    label.textContent = text;
+  }
+
+  function showError(message) {
+    document.getElementById('errorBanner').innerHTML = message
+      ? `<div class="banner-error">${escapeHtml(message)}</div>`
+      : '';
+  }
+
+  function fromRow(row) {
+    return { id: row.id, text: row.text, owner: row.owner, due: row.due, done: row.done };
+  }
+
+  async function loadItems() {
+    const { data, error } = await sb.from(TABLE).select('*').order('due', { ascending: true });
+    if (error) {
+      setStatus('error', 'Offline — showing last loaded data');
+      showError("Couldn't reach the database: " + error.message);
+      return;
+    }
+    items = (data || []).map(fromRow);
+    setStatus('live', 'Live — synced with team');
+    showError('');
+    render();
+  }
+
+  sb.channel('actions-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, loadItems)
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        setStatus('error', 'Live sync unavailable — refresh to update');
+      }
+    });
+
+  function todayStr() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function formatDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso + "T00:00:00");
+    const day = d.getDate();
+    const month = d.toLocaleString('en-GB', { month: 'short' });
+    const year = d.getFullYear();
+    return `${day} ${month} ${year}`;
+  }
+
+  function isOverdue(item) {
+    return !item.done && item.due && item.due < todayStr();
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function render() {
+    const total = items.length;
+    const open = items.filter(i => !i.done).length;
+    const done = items.filter(i => i.done).length;
+    const overdue = items.filter(isOverdue).length;
+
+    document.getElementById('summaryRow').innerHTML = `
+      <div class="summary-card accent">
+        <div class="num">${open}</div>
+        <div class="label">Open</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">${done}</div>
+        <div class="label">Done</div>
+      </div>
+      <div class="summary-card overdue">
+        <div class="num">${overdue}</div>
+        <div class="label">Overdue</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">${total}</div>
+        <div class="label">Total</div>
+      </div>
+    `;
+
+    const groupsEl = document.getElementById('groups');
+    if (total === 0) {
+      groupsEl.innerHTML = `<div class="empty-state">No actions yet — add your team's first one above. Everyone with this link sees updates live.</div>`;
+      return;
+    }
+
+    const owners = {};
+    items.forEach(item => {
+      const key = item.owner || "Unassigned";
+      if (!owners[key]) owners[key] = [];
+      owners[key].push(item);
+    });
+
+    const sortedOwners = Object.keys(owners).sort((a, b) => a.localeCompare(b));
+
+    groupsEl.innerHTML = sortedOwners.map(owner => {
+      const list = owners[owner].slice().sort((a, b) => {
+        if (a.done !== b.done) return a.done ? 1 : -1;
+        return (a.due || "").localeCompare(b.due || "");
+      });
+      const ownerOpen = list.filter(i => !i.done).length;
+      const ownerDone = list.filter(i => i.done).length;
+
+      const cards = list.map(item => {
+        const overdue = isOverdue(item);
+        return `
+          <div class="action-card ${overdue ? 'overdue' : ''}" data-id="${item.id}">
+            <input type="checkbox" class="checkbox" id="chk-${item.id}" ${item.done ? 'checked' : ''} data-action="toggle" data-id="${item.id}" aria-label="Mark done">
+            <div class="action-body">
+              <label for="chk-${item.id}" class="action-text ${item.done ? 'done' : ''}">${escapeHtml(item.text)}</label>
+              <div class="action-meta">
+                <span class="due-tag">${item.due ? formatDate(item.due) : 'No due date'}</span>
+                ${overdue ? '<span class="due-tag badge">OVERDUE</span>' : ''}
+              </div>
+            </div>
+            <button class="delete-btn" data-action="delete" data-id="${item.id}" aria-label="Delete action" title="Delete">✕</button>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="owner-group">
+          <div class="owner-header">
+            <h2>${escapeHtml(owner)}</h2>
+            <span class="counts">${ownerOpen} open · ${ownerDone} done</span>
+          </div>
+          ${cards}
+        </div>
+      `;
+    }).join('');
+  }
+
+  document.getElementById('addForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const actionInput = document.getElementById('actionInput');
+    const ownerInput = document.getElementById('ownerInput');
+    const dueInput = document.getElementById('dueInput');
+    const submitBtn = e.target.querySelector('.btn-add');
+
+    const newItem = {
+      text: actionInput.value.trim(),
+      owner: ownerInput.value.trim(),
+      due: dueInput.value || null,
+      done: false
+    };
+
+    submitBtn.disabled = true;
+    const { error } = await sb.from(TABLE).insert(newItem);
+    submitBtn.disabled = false;
+
+    if (error) {
+      showError("Couldn't add that action: " + error.message);
+      return;
+    }
+
+    actionInput.value = "";
+    ownerInput.value = "";
+    dueInput.value = "";
+    actionInput.focus();
+    await loadItems();
+  });
+
+  document.getElementById('groups').addEventListener('click', async function(e) {
+    const target = e.target.closest('[data-action="delete"]');
+    if (!target) return;
+    const id = target.dataset.id;
+    const prevItems = items;
+    items = items.filter(i => i.id !== id);
+    render();
+    const { error } = await sb.from(TABLE).delete().eq('id', id);
+    if (error) {
+      items = prevItems;
+      render();
+      showError("Couldn't delete that action: " + error.message);
+    }
+  });
+
+  document.getElementById('groups').addEventListener('change', async function(e) {
+    const target = e.target.closest('[data-action="toggle"]');
+    if (!target) return;
+    const id = target.dataset.id;
+    const done = target.checked;
+    const item = items.find(i => i.id === id);
+    if (item) item.done = done;
+    render();
+    const { error } = await sb.from(TABLE).update({ done }).eq('id', id);
+    if (error) {
+      if (item) item.done = !done;
+      render();
+      showError("Couldn't update that action: " + error.message);
+    }
+  });
+
+  loadItems();
+})();
+</script>
