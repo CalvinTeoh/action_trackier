@@ -276,12 +276,124 @@
     font-size: 0.88rem;
     margin-bottom: 16px;
   }
+
+  .login-wrap {
+    min-height: 60vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-block: 40px;
+  }
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 26px;
+    width: 100%;
+    max-width: 340px;
+  }
+  .login-card h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 0 0 4px;
+  }
+  .login-card p {
+    color: var(--ink-muted);
+    font-size: 0.9rem;
+    margin: 0 0 20px;
+  }
+  .login-card label {
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .login-card input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 0.95rem;
+    font-family: inherit;
+    margin-bottom: 14px;
+  }
+  .login-card input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .btn-login {
+    width: 100%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    border-radius: 9px;
+    padding: 11px 20px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-login:hover { opacity: 0.9; }
+  .btn-login:disabled { opacity: 0.6; cursor: default; }
+  .login-error {
+    color: var(--danger-ink);
+    font-size: 0.85rem;
+    margin: -6px 0 14px;
+    min-height: 1em;
+  }
+
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .user-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    color: var(--ink-muted);
+  }
+  .btn-signout {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .btn-signout:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 
-<div class="page">
-  <header>
+<div id="loginView" class="login-wrap">
+  <form class="login-card" id="loginForm">
     <h1>Action Tracker</h1>
-    <p>Keep every agreed action owned, dated, and visible.</p>
+    <p>Sign in to view and update your team's actions.</p>
+    <label for="loginEmail">Email</label>
+    <input type="email" id="loginEmail" autocomplete="username" required>
+    <label for="loginPassword">Password</label>
+    <input type="password" id="loginPassword" autocomplete="current-password" required>
+    <div class="login-error" id="loginError"></div>
+    <button type="submit" class="btn-login" id="loginBtn">Sign in</button>
+  </form>
+</div>
+
+<div class="page" id="appView" hidden>
+  <header>
+    <div class="top-bar">
+      <div>
+        <h1>Action Tracker</h1>
+        <p>Keep every agreed action owned, dated, and visible.</p>
+      </div>
+      <div class="user-chip">
+        <span id="userLabel"></span>
+        <button type="button" class="btn-signout" id="signOutBtn">Sign out</button>
+      </div>
+    </div>
   </header>
 
   <div class="status-bar">
@@ -310,7 +422,7 @@
   </form>
 
   <div id="groups"></div>
-</div>
+</div><!-- /#appView -->
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
@@ -321,6 +433,68 @@
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   let items = [];
+  let realtimeChannel = null;
+
+  const loginView = document.getElementById('loginView');
+  const appView = document.getElementById('appView');
+  const loginForm = document.getElementById('loginForm');
+  const loginError = document.getElementById('loginError');
+  const loginBtn = document.getElementById('loginBtn');
+  const userLabel = document.getElementById('userLabel');
+
+  function showApp(session) {
+    loginView.hidden = true;
+    appView.hidden = false;
+    const name = session.user.user_metadata && session.user.user_metadata.display_name;
+    userLabel.textContent = name ? name : session.user.email;
+    if (!realtimeChannel) {
+      realtimeChannel = sb.channel('actions-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, loadItems)
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            setStatus('error', 'Live sync unavailable — refresh to update');
+          }
+        });
+    }
+    loadItems();
+  }
+
+  function showLogin() {
+    appView.hidden = true;
+    loginView.hidden = false;
+    if (realtimeChannel) {
+      sb.removeChannel(realtimeChannel);
+      realtimeChannel = null;
+    }
+  }
+
+  loginForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    loginBtn.disabled = true;
+    loginError.textContent = '';
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    loginBtn.disabled = false;
+    if (error) {
+      loginError.textContent = 'Incorrect email or password.';
+      return;
+    }
+    showApp(data.session);
+  });
+
+  document.getElementById('signOutBtn').addEventListener('click', async function() {
+    await sb.auth.signOut();
+    showLogin();
+  });
+
+  sb.auth.getSession().then(({ data }) => {
+    if (data.session) {
+      showApp(data.session);
+    } else {
+      showLogin();
+    }
+  });
 
   function setStatus(state, text) {
     const dot = document.getElementById('statusDot');
@@ -351,14 +525,6 @@
     showError('');
     render();
   }
-
-  sb.channel('actions-changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, loadItems)
-    .subscribe((status) => {
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        setStatus('error', 'Live sync unavailable — refresh to update');
-      }
-    });
 
   function todayStr() {
     const d = new Date();
@@ -522,7 +688,5 @@
       showError("Couldn't update that action: " + error.message);
     }
   });
-
-  loadItems();
 })();
 </script>
