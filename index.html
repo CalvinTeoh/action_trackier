@@ -369,7 +369,9 @@
   .btn-signout:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 
-<div id="loginView" class="login-wrap">
+<div id="authCheck" class="login-wrap"><p style="color:var(--ink-muted); font-size:0.9rem;">Checking sign-in…</p></div>
+
+<div id="loginView" class="login-wrap" hidden>
   <form class="login-card" id="loginForm">
     <h1>Action Tracker</h1>
     <p>Sign in to view and update your team's actions.</p>
@@ -435,6 +437,7 @@
   let items = [];
   let realtimeChannel = null;
 
+  const authCheck = document.getElementById('authCheck');
   const loginView = document.getElementById('loginView');
   const appView = document.getElementById('appView');
   const loginForm = document.getElementById('loginForm');
@@ -443,6 +446,7 @@
   const userLabel = document.getElementById('userLabel');
 
   function showApp(session) {
+    authCheck.hidden = true;
     loginView.hidden = true;
     appView.hidden = false;
     const name = session.user.user_metadata && session.user.user_metadata.display_name;
@@ -460,6 +464,7 @@
   }
 
   function showLogin() {
+    authCheck.hidden = true;
     appView.hidden = true;
     loginView.hidden = false;
     if (realtimeChannel) {
@@ -493,6 +498,14 @@
       showApp(data.session);
     } else {
       showLogin();
+    }
+  });
+
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT') {
+      showLogin();
+    } else if (event === 'SIGNED_IN' && appView.hidden) {
+      showApp(session);
     }
   });
 
